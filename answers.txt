@@ -1,3 +1,0 @@
-1. What was the application ID you saw in the YARN frontend (http://localhost:8088) of the job where you actually ran the first_spark.py on the cluster? (It should be like application_0000000000000_0000. If you rand multiple time, pick any one.)
-
-	The Application ID is: application_1548266431210_1681
