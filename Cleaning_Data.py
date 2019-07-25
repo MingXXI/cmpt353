@@ -17,6 +17,8 @@ from sklearn.pipeline import make_pipeline
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
+import seaborn
+seaborn.set()
 
 pd.set_option('display.max_rows', 10000)
 pd.set_option('display.max_columns', 10000)
@@ -44,7 +46,7 @@ def read_csv(directory_name , fileName):
 #read_csv('sensor data' , '上楼梯口袋1')
 
 
-# In[4]:
+# In[53]:
 
 
 def Butterworth_filter(data):
@@ -52,7 +54,7 @@ def Butterworth_filter(data):
     Low-pass: keep the low frequencies; discard the high.
     High-pass: keep the high frequencies; discard the low.
     '''
-    b, a = signal.butter(3, 0.05, btype='lowpass', analog=False)
+    b, a = signal.butter(3, 0.05, btype = 'lowpass', analog = False)
     low_passed = signal.filtfilt(b, a, data)
     return low_passed
 
@@ -65,7 +67,7 @@ def Butterworth_filter_forplot(data):
     return data
 
 
-# In[5]:
+# In[135]:
 
 
 # citation: https://github.com/philip-L/CMPT353-1/blob/master/analysis2.py
@@ -73,41 +75,55 @@ def Butterworth_filter_forplot(data):
 def Butterworth_filter_and_FFT(data):
     # Using the Butterworth filter
     data_bw = data.apply(Butterworth_filter , axis = 0)
-    
-    del data_bw['time']
+    data_bw = data_bw.reset_index(drop = True)
+    # del data_bw['time']
+    data = data.reset_index(drop = True)
     # FFT of the data after the Butterworth filter
     data_FT = data_bw.apply(np.fft.fft , axis = 0)      
     data_FT = data_FT.apply(np.fft.fftshift , axis = 0)
     data_FT = data_FT.abs()
     
-    Fs = round(len(data)/data.at[len(data)-1, 'time']) #samples per second
-    data_FT['freq'] = np.linspace(-Fs/2, Fs/2, num=len(data))
-    return data_FT
+    # Determine the sampling frequency
+    Fs = round(len(data) / data.at[len(data)-1, 'time']) #samples per second
+    data_FT['freq'] = np.linspace(-Fs/2, Fs/2, num = len(data))
+    
+    # Find the largest peak at a frequency greater than 0 to determine the average steps per second
+    temp_FT = data_FT[data_FT['freq'] > 0.1]
+    ind = temp_FT['aT'].nlargest(n = 1)
+    max_ind = ind.idxmax()
+    avg_freq = data_FT.at[max_ind , 'freq']
+    
+    #Transform the data to fit a normal distribution
+    max_val = data_FT['aT'].nlargest(n = 1)
+    max_val_ind = max_val.idxmax()
+    data_FT.at[max_val_ind , 'aT'] = temp_FT['aT'].max()
+    
+    return data_FT , avg_freq
 
 
-# In[6]:
+# In[137]:
 
 
-#Butterworth_filter_and_FFT(read_csv('sensor data' , '上楼梯口袋1'))
+#Butterworth_filter_and_FFT(read_csv('walk_hold' , 'walk_hold2'))
 
 
-# In[7]:
+# In[133]:
 
 
 def plot_acceleration_FFT(data_FT):
     plt.figure(figsize = (20, 15))
-    plt.plot(data_FT['ax'] , 'r.' , alpha = 0.5)
+    plt.plot(data_FT['freq'] , data_FT['aT'] , 'r-' , alpha = 0.5)
     plt.title("FFT for total acceleration")
 
 
-# In[8]:
+# In[134]:
 
 
-#Butterworth_filter_and_FFT(read_csv('sensor data' , '上楼梯口袋1'))
-#plot_acceleration_FFT(Butterworth_filter_and_FFT(read_csv('sensor data' , '走路口袋1')))
+#Butterworth_filter_and_FFT(read_csv('walk_hold' , 'walk_hold2'))
+#plot_acceleration_FFT(Butterworth_filter_and_FFT(read_csv('walk_hold' , 'walk_hold2')))
 
 
-# In[9]:
+# In[107]:
 
 
 def plot_acceleration(data):
@@ -318,7 +334,14 @@ def get_feature_dataFrame():
         data = read_csv('falldown_hold' , 'falldown_hold' + str(i))
         data_feature = get_basic_feature_butterworth(data)
         data_feature.append('falldown_hold')
-        feature_list.append(data_feature)   
+        feature_list.append(data_feature)  
+        
+    for i in range(1 , 16):
+        data = read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))
+        data_feature = get_basic_feature_butterworth(data)
+        data_feature.append('falldown_inpocket')
+        feature_list.append(data_feature)  
+        
 
     '''
     ax , ay , az , wx , wy , wz , aT
@@ -343,7 +366,7 @@ def get_feature_dataFrame():
                    'aT_mean' , 'aT_std' , 'aT_min' , 'aT_25' , 'aT_50' , 'aT_75' , 'aT_max',
                    'catogary']
     df = pd.DataFrame(feature_list , columns = column_name)
-    df.to_csv('feature_df.csv')
+    df.to_csv('feature_df.csv' , index = False)
     return df
 
 
@@ -360,7 +383,7 @@ def get_X():
         X.append(get_basic_feature_butterworth(read_csv('walk_hold' , 'walk_hold' + str(i))))
         X.append(get_basic_feature_butterworth(read_csv('walk_inpocket' , 'walk_inpocket' + str(i))))
         X.append(get_basic_feature_butterworth(read_csv('falldown_hold' , 'falldown_hold' + str(i))))
-        # X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
+        X.append(get_basic_feature_butterworth(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
     return X    
 
 def get_y():
@@ -373,16 +396,17 @@ def get_y():
         y.append('walk_hold')
         y.append('walk_inpocket')
         y.append('falldown_hold')
+        y.append('falldown_inpocket')
     return y
 
 
-# In[28]:
+# In[21]:
 
 
 #get_feature_dataFrame()
 
 
-# In[22]:
+# In[122]:
 
 
 def build_test_data(directory_name , fileName):
@@ -409,87 +433,80 @@ def build_test_data(directory_name , fileName):
     return feature_list
 
 
-# In[23]:
+# In[123]:
 
 
 #build_test_data('Test predict data' , 'downstairs_hold_test')
 
 
-# In[24]:
+# In[129]:
 
 
-OUTPUT_TEMPLATE = (
-    'Bayesian classifier: {bayes_rgb:.3g} {bayes_lab:.3g}\n'
-    'kNN classifier:      {knn_rgb:.3g} {knn_lab:.3g}\n'
-    'SVM classifier:      {svm_rgb:.3g} {svm_lab:.3g}\n'
-)
-
-def ML_tools():
-#     y = data['catogary']
-#     del data['catogary']
-#     X = data
-    
-    X = get_X()
-    y = get_y()
-    X_train , X_valid , y_train , y_valid = train_test_split(
-        X , y 
-    )
-    
-    X_test = build_test_data()
-
-    bayes_model = GaussianNB()
-    bayes_model.fit(X_train , y_train)
-    print(bayes_model.score(X_valid, y_valid))
-    print(bayes_model.predict(X_test))
-
-
-# In[25]:
-
-
-def plot_feature():
-    x = range(49)
-    y = get_X()
-    # plt.plot(x[:-8], y[0][:-8], 'b-' , alpha = 0.5)
-    plt.figure(figsize = (30, 30))
-    plt.subplot(7 , 1 , 1)
-    plt.plot(x, y[0], 'b-' , alpha = 0.5)
-    plt.title('x[0], downstairs_hold')
-    plt.subplot(7 , 1 , 2)
-    plt.plot(x, y[1], 'b-' , alpha = 0.5)
-    plt.title('X[1], downstairs_inpocket')
-    plt.subplot(7 , 1 , 3)
-    plt.plot(x, y[2], 'b-' , alpha = 0.5)
-    plt.title('X[2], upstairs_hold')
-    plt.subplot(7 , 1 , 4)
-    plt.plot(x, y[3], 'b-' , alpha = 0.5)
-    plt.title('X[3], upstairs_inpocket')
-    plt.subplot(7 , 1 , 5)
-    plt.plot(x, y[4], 'b-' , alpha = 0.5)
-    plt.title('X[4], walk_hold')
-    plt.subplot(7 , 1 , 6)
-    plt.plot(x, y[5], 'b-' , alpha = 0.5)
-    plt.title('X[5], walk_inpocket')
-    plt.subplot(7 , 1 , 7)
-    plt.plot(x, y[6], 'b-' , alpha = 0.5)
-    plt.title('X[6], falldown_hold')
-    
-#plot_feature()
+def FFT_normaltest():
+    for i in range(1 , 16):
+        data = read_csv('downstairs_hold' , 'downstairs_hold' + str(i))
+        data_FFT = Butterworth_filter_and_FFT(data)
+        data_FFT_pvalue = stats.normaltest(data_FFT['aT']).pvalue
+        if (data_FFT_pvalue <= 0.05):
+            print('downstairs_hold' + str(i) , "is not normal" , "pvalue:" , data_FFT_pvalue)
+        else:
+            print('downstairs_hold' + str(i) , "is normal" , "pvalue:" , data_FFT_pvalue)
+            
+        data = read_csv('upstairs_hold' , 'upstairs_hold' + str(i))
+        data_FFT = Butterworth_filter_and_FFT(data)
+        data_FFT_pvalue = stats.normaltest(data_FFT['aT']).pvalue
+        if (data_FFT_pvalue <= 0.05):
+            print('upstairs_hold' + str(i) , "is not normal" , "pvalue:" , data_FFT_pvalue)
+        else:
+            print('upstairs_hold' + str(i) , "is normal" , "pvalue:" , data_FFT_pvalue)
+            
+        data = read_csv('walk_hold' , 'walk_hold' + str(i))
+        data_FFT = Butterworth_filter_and_FFT(data)
+        data_FFT_pvalue = stats.normaltest(data_FFT['aT']).pvalue
+        if (data_FFT_pvalue <= 0.05):
+            print('walk_hold' + str(i) , "is not normal" , "pvalue:" , data_FFT_pvalue)
+        else:
+            print('walk_hold' + str(i) , "is normal" , "pvalue:" , data_FFT_pvalue)
 
 
-# In[26]:
+# In[131]:
 
 
-def plot_compare_feature():
-    plt.figure(figsize = (30, 30))
-    plt.plot(x, y[0], 'r-' , alpha = 0.5, label='downstairs_hold')     #red downstairs_hold
-    plt.plot(x, y[1], 'g-' , alpha = 0.5, label='downstairs_inpocket') #green downstairs_inpocket
-    plt.plot(x, y[2], 'b-' , alpha = 0.5, label='upstairs_hold')       #blue upstairs_hold
-    plt.plot(x, y[3], 'y-' , alpha = 0.5, label='upstairs_inpocket')   #yellow upstairs_inpocket
-    plt.plot(x, y[4], 'k-' , alpha = 0.5, label='walk_hold')           #black walk_hold
-    plt.plot(x, y[5], 'c-' , alpha = 0.5, label='walk_inpocket')       #cyan walk_inpocket
-    plt.plot(x, y[6], 'm-' , alpha = 0.5, label='falldown_hold')       #magenta falldown_hold
-    plt.legend()
+# FFT_normaltest()
 
 
-# In[27]:
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
