@@ -469,44 +469,4 @@ def FFT_normaltest():
             print('walk_hold' + str(i) , "is normal" , "pvalue:" , data_FFT_pvalue)
 
 
-# In[131]:
-
-
-# FFT_normaltest()
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
 
