@@ -67,16 +67,30 @@ def Butterworth_filter_forplot(data):
 def Butterworth_filter_and_FFT(data):
     # Using the Butterworth filter
     data_bw = data.apply(Butterworth_filter , axis = 0)
-    
-    del data_bw['time']
+    data_bw = data_bw.reset_index(drop = True)
+    # del data_bw['time']
+    data = data.reset_index(drop = True)
     # FFT of the data after the Butterworth filter
     data_FT = data_bw.apply(np.fft.fft , axis = 0)      
     data_FT = data_FT.apply(np.fft.fftshift , axis = 0)
     data_FT = data_FT.abs()
     
-    Fs = round(len(data)/data.at[len(data)-1, 'time']) #samples per second
-    data_FT['freq'] = np.linspace(-Fs/2, Fs/2, num=len(data))
-    return data_FT
+    # Determine the sampling frequency
+    Fs = round(len(data) / data.at[len(data)-1, 'time']) #samples per second
+    data_FT['freq'] = np.linspace(-Fs/2, Fs/2, num = len(data))
+    
+    # Find the largest peak at a frequency greater than 0 to determine the average steps per second
+    temp_FT = data_FT[data_FT['freq'] > 0.1]
+    ind = temp_FT['aT'].nlargest(n = 1)
+    max_ind = ind.idxmax()
+    avg_freq = data_FT.at[max_ind , 'freq']
+    
+    #Transform the data to fit a normal distribution
+    max_val = data_FT['aT'].nlargest(n = 1)
+    max_val_ind = max_val.idxmax()
+    data_FT.at[max_val_ind , 'aT'] = temp_FT['aT'].max()
+    
+    return data_FT , avg_freq
 
 
 #Butterworth_filter_and_FFT(read_csv('sensor data' , '上楼梯口袋1'))
@@ -242,7 +256,7 @@ def get_feature_dataFrame():
     '''
     '''
     'ax_slope_max' , 'ay_slope_max' , 'az_slope_max' , 'wx_slope_max' , 'wy_slope_max' , 
-                   'wz_slope_max' , 'aT_slope_max' , 'catogary'
+                   'wz_slope_max' , 'aT_slope_max' , 'category'
     '''
     column_name = ['ax_mean' , 'ax_std' , 'ax_min' , 'ax_25' , 'ax_50' , 'ax_75' , 'ax_max',
                    'ay_mean' , 'ay_std' , 'ay_min' , 'ay_25' , 'ay_50' , 'ay_75' , 'ay_max',
@@ -274,7 +288,7 @@ def get_X():
         X.append(get_basic_feature_butterworth(read_csv('walk_hold' , 'walk_hold' + str(i))))
         X.append(get_basic_feature_butterworth(read_csv('walk_inpocket' , 'walk_inpocket' + str(i))))
         X.append(get_basic_feature(read_csv('falldown_hold' , 'falldown_hold' + str(i))))
-        # X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
+        X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
     return X  
 
 def get_X_with_butt():
@@ -287,7 +301,7 @@ def get_X_with_butt():
         X.append(get_basic_feature_butterworth(read_csv('walk_hold' , 'walk_hold' + str(i))))
         X.append(get_basic_feature_butterworth(read_csv('walk_inpocket' , 'walk_inpocket' + str(i))))
         X.append(get_basic_feature_butterworth(read_csv('falldown_hold' , 'falldown_hold' + str(i))))
-        # X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
+        X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
     return X 
 
 def get_X_orig():
@@ -300,7 +314,7 @@ def get_X_orig():
         X.append(get_basic_feature(read_csv('walk_hold' , 'walk_hold' + str(i))))
         X.append(get_basic_feature(read_csv('walk_inpocket' , 'walk_inpocket' + str(i))))
         X.append(get_basic_feature(read_csv('falldown_hold' , 'falldown_hold' + str(i))))
-        # X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
+        X.append(get_basic_feature(read_csv('falldown_inpocket' , 'falldown_inpocket' + str(i))))
     return X 
 
 def get_y():
@@ -313,6 +327,7 @@ def get_y():
         y.append('walk_hold')
         y.append('walk_inpocket')
         y.append('falldown_hold')
+        y.append('falldown_inpocket')
     return y
 
 
